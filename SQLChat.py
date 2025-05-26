@@ -75,8 +75,8 @@ def get_gemini_response(question, prompt_text):
         model = genai.GenerativeModel('gemini-1.5-flash') # Using a common and effective model
         full_prompt = f"{prompt_text}\n\nUser Question (in Arabic):\n{question}\n\nSQL Query (respond *only* with the SQL query inside ```sql ... ``` block):\n"
         
-        # Log the full prompt being sent to Gemini (excluding API key)
-        logging.info(f"Sending prompt to Gemini: {full_prompt}")
+        # Log a snippet of the prompt being sent to Gemini (excluding API key)
+        logging.info(f"Sending prompt to Gemini: {full_prompt[:500]}...")
 
         response = model.generate_content(full_prompt)
 
@@ -93,21 +93,19 @@ def get_gemini_response(question, prompt_text):
                     logging.warning(f"Extracted SQL is invalid or empty: {sql_query}")
                     return "No valid SQL (empty or missing SELECT) found in response."
             else:
-                # If no ```sql ``` block, check if the response itself is a valid SQL.
-                # This is a fallback and might need more robust validation.
-                # For now, we assume the LLM will stick to the format.
-                # If the LLM just returns plain SQL, we might try to use it,
-                # but it's less reliable than the markdown block.
-                # For simplicity, let's stick to expecting the ```sql ``` block.
                 logging.warning(f"No ```sql ``` block found in response: {response.text}")
-                return "No SQL code block found in Gemini's response."
+                # Fallback: check if the response text itself is a plausible SQL query
+                cleaned_response_text = response.text.strip()
+                if cleaned_response_text.upper().startswith("SELECT"):
+                    logging.info("No ```sql``` block, but raw response looks like SQL. Using it.")
+                    return cleaned_response_text
+                return "No SQL code block found in Gemini's response, and raw text doesn't appear to be SQL."
         else:
             logging.warning("No response or empty text from Gemini.")
             return "No response from Gemini."
     except Exception as e:
         logging.error(f"Gemini API error: {e}")
-        # Check for specific API errors if possible, e.g., authentication, quota
-        if "API_KEY_INVALID" in str(e): # Example, check actual error messages
+        if "API_KEY_INVALID" in str(e).upper():
              return "Error: Gemini API key is invalid."
         return f"Error in AI response: {e}"
 
@@ -121,7 +119,7 @@ Students Table:
 - FirstName (TEXT)
 - LastName (TEXT)
 - Gender (TEXT) -- Example values: 'ذكر', 'Female' (Note: Use 'Female' for 'أنثى' or 'طالبة' in WHERE clauses if your data uses 'Female')
-- DateOfBirth (TEXT) -- Format: YYYY-MM-DD
+- DateOfBirth (TEXT) -- Format:<y_bin_46>-MM-DD
 
 Education Table:
 - EducationID (INTEGER, PRIMARY KEY)
@@ -144,5 +142,5 @@ Examples:
 ### Example 1:
 User Question: قائمة بأسماء جميع الطالبات
 SQL Query:
-```
-SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female'
+```sql
+SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female';

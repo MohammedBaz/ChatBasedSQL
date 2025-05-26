@@ -109,49 +109,42 @@ def get_gemini_response(question, prompt_text):
              return "Error: Gemini API key is invalid."
         return f"Error in AI response: {e}"
 
-# --- SQL Prompt (Ensure this matches your database schema and desired behavior) ---
-# THE EXAMPLES (1, 2, 3, 4, 5) ARE ALL INCLUDED INSIDE THIS TRIPLE-QUOTED STRING:
 prompt = '''
-You are an AI assistant that translates Arabic natural language questions into SQL queries for a student database.
-The database has the following schema:
+Database Schema:
+Students Table: StudentID, FirstName, LastName, Gender, DateOfBirth
+Education Table: EducationID, StudentID, Level, Grade
+Parents Table: ParentID, StudentID, ContactNumber
 
-Students Table:
-- StudentID (INTEGER, PRIMARY KEY)
-- FirstName (TEXT)
-- LastName (TEXT)
-- Gender (TEXT) -- Example values: 'ذكر', 'Female' (Note: Use 'Female' for 'أنثى' or 'طالبة' in WHERE clauses if your data uses 'Female')
-- DateOfBirth (TEXT) -- Format:<y_bin_46>-MM-DD
-
-Education Table:
-- EducationID (INTEGER, PRIMARY KEY)
-- StudentID (INTEGER, FOREIGN KEY referencing Students.StudentID)
-- Level (TEXT) -- Example values: 'ابتدائي', 'متوسط', 'ثانوي'
-- Grade (TEXT) -- Example values: 'ممتاز', 'جيد جداً', 'جيد', 'مقبول'
-
-Parents Table:
-- ParentID (INTEGER, PRIMARY KEY)
-- StudentID (INTEGER, FOREIGN KEY referencing Students.StudentID)
-- ContactNumber (TEXT)
-
-Instructions:
-1.  Generate SQL queries in response to Arabic questions based on the database schema.
-2.  Ensure to use JOIN clauses when necessary to combine information from different tables.
-3.  **IMPORTANT**: Respond *ONLY* with the SQL query itself, enclosed in a ```sql ... ``` markdown block. Do not add any other text, explanation, or salutation.
-4.  Pay attention to Arabic keywords for gender, levels, and grades and map them to the database values. For example, if the user asks for "طالبات" (female students), use `WHERE s.Gender = 'Female'`. If the user asks for "المرحلة الابتدائية", use `WHERE e.Level = 'ابتدائي'`.
+Instructions: Generate SQL queries in response to Arabic questions based on the database schema.
+Ensure to use JOIN clauses when necessary to combine information from different tables.
 
 Examples:
 ### Example 1:
-User Question: قائمة بأسماء جميع الطالبات
-SQL Query:
-'''sql
-SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female';
-SELECT COUNT(*) FROM Students s JOIN Education e ON s.StudentID = e.StudentID WHERE e.Level = 'ابتدائي';
-SELECT s.FirstName, s.LastName, e.Grade FROM Students s
-JOIN Education e ON s.StudentID = e.StudentID
-WHERE e.Grade = 'ممتاز';
-SELECT s.FirstName, s.LastName, p.ContactNumber FROM Students s
-JOIN Parents p ON s.StudentID = p.StudentID;
-SELECT s.FirstName, s.LastName
-FROM Students s JOIN Education e ON s.StudentID = e.StudentID
-WHERE e.Level = 'ابتدائي' AND s.FirstName = 'محمد';
+"قائمة بأسماء جميع الطالبات"
+SQL: SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female';
+
+### Example 2:
+"كم عدد الطلاب في المدرسة الابتدائية؟"
+SQL: SELECT COUNT(*) FROM Education WHERE Level = 'ابتدائي';
+
+### Example 3:
+"اعرض أسماء ودرجات الطلاب الذين حصلوا على الدرجة 'ممتاز'"
+SQL: SELECT s.FirstName, s.LastName, e.Grade FROM Students s
+        JOIN Education e ON s.StudentID = e.StudentID
+        WHERE e.Grade = 'ممتاز';
+
+### Example 4:
+"أظهر أسماء جميع الطلاب وأرقام هواتف آبائهم"
+SQL: SELECT s.FirstName, s.LastName, p.ContactNumber FROM Students s
+        JOIN Parents p ON s.StudentID = p.StudentID;
+
+### Example 5:
+"ما هي أسماء الطلاب في المرحلة الابتدائية؟"
+SQL: SELECT s.FirstName, s.LastName
+        FROM Students s JOIN Education e ON s.StudentID = e.StudentID
+        WHERE e.Level = 'ابتدائي';
+
+### Format your response as: ```sql <QUERY> ```
 '''
+
+

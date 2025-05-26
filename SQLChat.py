@@ -110,6 +110,7 @@ def get_gemini_response(question, prompt_text):
         return f"Error in AI response: {e}"
 
 # --- SQL Prompt (Ensure this matches your database schema and desired behavior) ---
+# THE EXAMPLES (1, 2, 3, 4, 5) ARE ALL INCLUDED INSIDE THIS TRIPLE-QUOTED STRING:
 prompt = '''
 You are an AI assistant that translates Arabic natural language questions into SQL queries for a student database.
 The database has the following schema:
@@ -144,3 +145,13 @@ User Question: قائمة بأسماء جميع الطالبات
 SQL Query:
 ```sql
 SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female';
+SELECT COUNT(*) FROM Students s JOIN Education e ON s.StudentID = e.StudentID WHERE e.Level = 'ابتدائي';
+SELECT s.FirstName, s.LastName, e.Grade FROM Students s
+JOIN Education e ON s.StudentID = e.StudentID
+WHERE e.Grade = 'ممتاز';
+SELECT s.FirstName, s.LastName, p.ContactNumber FROM Students s
+JOIN Parents p ON s.StudentID = p.StudentID;
+SELECT s.FirstName, s.LastName
+FROM Students s JOIN Education e ON s.StudentID = e.StudentID
+WHERE e.Level = 'ابتدائي' AND s.FirstName = 'محمد';
+```

@@ -145,4 +145,4 @@ Examples:
 User Question: قائمة بأسماء جميع الطالبات
 SQL Query:
 ```sql
-SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female';
+SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female'

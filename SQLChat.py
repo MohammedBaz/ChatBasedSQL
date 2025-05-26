@@ -73,7 +73,9 @@ def generate_natural_response(results, sql_query):
 def get_gemini_response(question, prompt_text):
     try:
         model = genai.GenerativeModel('gemini-1.5-flash') # Using a common and effective model
-        full_prompt = f"{prompt_text}\n\nUser Question (in Arabic):\n{question}\n\nSQL Query (respond *only* with the SQL query inside ```sql ... ``` block):\n"
+        # The instruction for the format is now part of the main prompt.
+        # The get_gemini_response function will still try to extract SQL from ```sql ... ``` block
+        full_prompt = f"{prompt_text}\n\nUser Question (in Arabic):\n{question}\n"
         
         # Log a snippet of the prompt being sent to Gemini (excluding API key)
         logging.info(f"Sending prompt to Gemini: {full_prompt[:500]}...")
@@ -82,11 +84,10 @@ def get_gemini_response(question, prompt_text):
 
         if response and hasattr(response, 'text') and response.text:
             logging.info(f"Raw response from Gemini: {response.text}")
-            # Improved regex to be more robust
+            # Regex to find ```sql ... ``` block
             match = re.search(r"```sql\s*(.*?)\s*```", response.text, re.DOTALL | re.IGNORECASE)
             if match:
                 sql_query = match.group(1).strip()
-                # Basic validation: ensure it's not empty and contains SELECT
                 if sql_query and "SELECT" in sql_query.upper():
                     return sql_query
                 else:
@@ -94,10 +95,14 @@ def get_gemini_response(question, prompt_text):
                     return "No valid SQL (empty or missing SELECT) found in response."
             else:
                 logging.warning(f"No ```sql ``` block found in response: {response.text}")
-                # Fallback: check if the response text itself is a plausible SQL query
+                # Fallback: If the prompt tells the LLM to NOT use the block,
+                # we might assume the whole text is the query.
+                # However, your current prompt DOES ask for the block: "### Format your response as: ```sql <QUERY> ```"
+                # So, if it's not found, it's an issue.
+                # For robustness, we can check if the raw response itself looks like SQL as a last resort.
                 cleaned_response_text = response.text.strip()
                 if cleaned_response_text.upper().startswith("SELECT"):
-                    logging.info("No ```sql``` block, but raw response looks like SQL. Using it.")
+                    logging.info("No ```sql``` block, but raw response looks like SQL. Using it as a fallback.")
                     return cleaned_response_text
                 return "No SQL code block found in Gemini's response, and raw text doesn't appear to be SQL."
         else:
@@ -109,6 +114,8 @@ def get_gemini_response(question, prompt_text):
              return "Error: Gemini API key is invalid."
         return f"Error in AI response: {e}"
 
+# --- SQL Prompt ---
+# Corrected prompt (removed the extra " at the end)
 prompt = '''
 Database Schema:
 Students Table: StudentID, FirstName, LastName, Gender, DateOfBirth
@@ -147,4 +154,129 @@ SQL: SELECT s.FirstName, s.LastName
 ### Format your response as: ```sql <QUERY> ```
 '''
 
+# --- Streamlit App UI (This is the part you asked about) ---
+st.set_page_config(page_title="NLP to SQL Chatbot 🤖", layout="wide")
 
+st.title("🤖 Chatbot الاستعلام عن بيانات الطلاب باللغة العربية")
+st.caption("اسأل عن بيانات الطلاب وسأقوم بترجمة سؤالك إلى SQL وتنفيذ الاستعلام!")
+
+# --- Database Check and Creation (Optional: For demonstration) ---
+def initialize_db(db_path):
+    if not os.path.exists(db_path):
+        st.warning(f"قاعدة البيانات {db_path} غير موجودة. سأقوم بإنشاء واحدة بمخطط تجريبي.")
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            # Create Students Table
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Students (
+                StudentID INTEGER PRIMARY KEY AUTOINCREMENT,
+                FirstName TEXT NOT NULL,
+                LastName TEXT NOT NULL,
+                Gender TEXT,
+                DateOfBirth TEXT
+            );
+            ''')
+            # Create Education Table
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Education (
+                EducationID INTEGER PRIMARY KEY AUTOINCREMENT,
+                StudentID INTEGER,
+                Level TEXT,
+                Grade TEXT,
+                FOREIGN KEY (StudentID) REFERENCES Students (StudentID)
+            );
+            ''')
+            # Create Parents Table
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS Parents (
+                ParentID INTEGER PRIMARY KEY AUTOINCREMENT,
+                StudentID INTEGER,
+                ContactNumber TEXT,
+                FOREIGN KEY (StudentID) REFERENCES Students (StudentID)
+            );
+            ''')
+            # Insert some sample data
+            cursor.execute("INSERT INTO Students (FirstName, LastName, Gender, DateOfBirth) VALUES ('أحمد', 'الغامدي', 'ذكر', '2005-03-15')")
+            cursor.execute("INSERT INTO Students (FirstName, LastName, Gender, DateOfBirth) VALUES ('فاطمة', 'الشهري', 'Female', '2006-07-22')")
+            cursor.execute("INSERT INTO Students (FirstName, LastName, Gender, DateOfBirth) VALUES ('محمد', 'القحطاني', 'ذكر', '2005-11-10')")
+            
+            cursor.execute("INSERT INTO Education (StudentID, Level, Grade) VALUES (1, 'ثانوي', 'ممتاز')")
+            cursor.execute("INSERT INTO Education (StudentID, Level, Grade) VALUES (2, 'متوسط', 'جيد جداً')")
+            cursor.execute("INSERT INTO Education (StudentID, Level, Grade) VALUES (3, 'ثانوي', 'جيد')")
+
+            cursor.execute("INSERT INTO Parents (StudentID, ContactNumber) VALUES (1, '0501234567')")
+            cursor.execute("INSERT INTO Parents (StudentID, ContactNumber) VALUES (2, '0559876543')")
+            
+            conn.commit()
+            conn.close()
+            st.success(f"تم إنشاء قاعدة البيانات {db_path} مع بيانات تجريبية.")
+        except Exception as e:
+            st.error(f"فشل في إنشاء قاعدة البيانات التجريبية: {e}")
+            st.stop()
+    else:
+        logging.info(f"Database {db_path} found.")
+
+# Initialize the database if it doesn't exist (and if you want sample data)
+# If your database student_db.sqlite ALREADY EXISTS and has data, you can comment out or remove the next line.
+initialize_db(DATABASE_PATH)
+
+
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "assistant", "content": "مرحباً! كيف يمكنني مساعدتك اليوم في الاستعلام عن بيانات الطلاب؟ (مثال: كم عدد الطلاب الذكور؟)"}]
+
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if "sql_query" in message and message["sql_query"]:
+            st.code(message["sql_query"], language="sql")
+
+# Accept user input
+if user_question := st.chat_input("اسأل سؤالك هنا..."):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": user_question})
+    # Display user message in chat message container
+    with st.chat_message("user"):
+        st.markdown(user_question)
+
+    # Display assistant response in chat message container
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        message_placeholder.markdown(" أفكر... 🤔 الرجاء الانتظار قليلاً.")
+
+        # 1. Get SQL query from Gemini
+        generated_sql = get_gemini_response(user_question, prompt)
+        
+        assistant_response_content = ""
+        sql_to_display = None
+
+        if generated_sql and not generated_sql.lower().startswith("error:") and \
+           not "no valid sql" in generated_sql.lower() and \
+           not "no sql code block" in generated_sql.lower() and \
+           not "no response from gemini" in generated_sql.lower():
+            sql_to_display = generated_sql
+            message_placeholder.markdown(f"تم إنشاء استعلام SQL التالي:\n```sql\n{sql_to_display}\n```\nالآن سأقوم بتنفيذه...")
+            
+            # 2. Execute SQL query
+            results = read_sql_query(sql_to_display, DATABASE_PATH)
+            
+            # 3. Generate natural language response from results
+            natural_response = generate_natural_response(results, sql_to_display)
+            assistant_response_content = natural_response
+            
+            message_placeholder.markdown(assistant_response_content)
+            if sql_to_display: # Re-display SQL with the result
+                 st.code(sql_to_display, language="sql")
+
+        else: # Handle errors from Gemini or SQL generation
+            assistant_response_content = f"عذراً، لم أتمكن من معالجة طلبك بالشكل الصحيح. {generated_sql}"
+            message_placeholder.markdown(assistant_response_content)
+
+    # Add assistant response (and SQL) to chat history
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": assistant_response_content,
+        "sql_query": sql_to_display # Store for potential redisplay
+    })

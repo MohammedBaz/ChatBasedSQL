@@ -143,7 +143,7 @@ Examples:
 ### Example 1:
 User Question: قائمة بأسماء جميع الطالبات
 SQL Query:
-```sql
+'''sql
 SELECT s.FirstName, s.LastName FROM Students s WHERE s.Gender = 'Female';
 SELECT COUNT(*) FROM Students s JOIN Education e ON s.StudentID = e.StudentID WHERE e.Level = 'ابتدائي';
 SELECT s.FirstName, s.LastName, e.Grade FROM Students s
@@ -154,4 +154,4 @@ JOIN Parents p ON s.StudentID = p.StudentID;
 SELECT s.FirstName, s.LastName
 FROM Students s JOIN Education e ON s.StudentID = e.StudentID
 WHERE e.Level = 'ابتدائي' AND s.FirstName = 'محمد';
-```
+'''
